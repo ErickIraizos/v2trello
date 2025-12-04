@@ -2,7 +2,6 @@ import React, { useMemo, useState, useCallback } from 'react';
 import {
   Box,
   Typography,
-  Grid,
   Card,
   CardContent,
   Stack,
@@ -25,7 +24,8 @@ import FilterListRoundedIcon from '@mui/icons-material/FilterListRounded';
 import EditRoundedIcon from '@mui/icons-material/EditRounded';
 import InfoRoundedIcon from '@mui/icons-material/InfoRounded';
 import MoreVertRoundedIcon from '@mui/icons-material/MoreVertRounded';
-import { useLocalStorage, useStorageListener } from '../hooks/useLocalStorage';
+import TodayRoundedIcon from '@mui/icons-material/TodayRounded';
+import { useLocalStorage, useStorageListener, emitStorageChange } from '../hooks/useLocalStorage';
 import { initialBoards } from '../data/initialData';
 import { Board, Card as CardType } from '../types';
 import CardDetailsModal from '../components/CardDetailsModal';
@@ -35,14 +35,14 @@ export default function Calendar() {
   const [currentDate, setCurrentDate] = useState(new Date());
   const [searchText, setSearchText] = useState('');
   const [filterBoard, setFilterBoard] = useState('');
-  const [draggedCard, setDraggedCard] = useState<(CardType & { boardId: string }) | null>(null);
+  const [draggedCard, setDraggedCard] = useState<(CardType & { boardId: string; boardTitle: string }) | null>(null);
   const [showFilters, setShowFilters] = useState(false);
   const [refreshTrigger, setRefreshTrigger] = useState(0);
-  const [editingCard, setEditingCard] = useState<(CardType & { boardId: string }) | null>(null);
+  const [editingCard, setEditingCard] = useState<(CardType & { boardId: string; boardTitle: string }) | null>(null);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [editDate, setEditDate] = useState('');
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
-  const [selectedCardForMenu, setSelectedCardForMenu] = useState<(CardType & { boardId: string }) | null>(null);
+  const [selectedCardForMenu, setSelectedCardForMenu] = useState<(CardType & { boardId: string; boardTitle: string }) | null>(null);
   const [detailsModalOpen, setDetailsModalOpen] = useState(false);
   const [selectedCardForDetails, setSelectedCardForDetails] = useState<CardType | null>(null);
 
@@ -52,7 +52,6 @@ export default function Calendar() {
 
   useStorageListener(handleStorageChange);
 
-  // Obtener todas las tarjetas de todos los tableros
   const allCards = useMemo(() => {
     const cards: (CardType & { boardId: string; boardTitle: string })[] = [];
 
@@ -70,12 +69,10 @@ export default function Calendar() {
     return cards;
   }, [boards, refreshTrigger]);
 
-  // Tarjetas sin fecha de vencimiento (no programadas)
   const unscheduledCards = useMemo(() => {
     return allCards.filter((card) => !card.dueDate);
   }, [allCards]);
 
-  // Filtrar tarjetas no programadas
   const filteredCards = useMemo(() => {
     return unscheduledCards.filter((card) => {
       const searchMatch =
@@ -86,7 +83,6 @@ export default function Calendar() {
     });
   }, [unscheduledCards, searchText, filterBoard]);
 
-  // Tarjetas programadas en el mes actual
   const scheduledCards = useMemo(() => {
     const year = currentDate.getFullYear();
     const month = currentDate.getMonth();
@@ -109,7 +105,8 @@ export default function Calendar() {
   const monthDays = getDaysInMonth(currentDate);
   const firstDay = getFirstDayOfMonth(currentDate);
   const daysArray = Array.from({ length: monthDays }, (_, i) => i + 1);
-  const emptyDays = Array.from({ length: firstDay }, (_, i) => null);
+  const emptyDays = Array.from({ length: firstDay }, () => null);
+  const allDays = [...emptyDays, ...daysArray];
 
   const handlePrevMonth = () => {
     setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() - 1));
@@ -119,7 +116,11 @@ export default function Calendar() {
     setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() + 1));
   };
 
-  const handleDragStart = (card: CardType & { boardId: string }) => {
+  const handleGoToToday = () => {
+    setCurrentDate(new Date());
+  };
+
+  const handleDragStart = (card: CardType & { boardId: string; boardTitle: string }) => {
     setDraggedCard(card);
   };
 
@@ -135,7 +136,7 @@ export default function Calendar() {
         dueDate: newDate.toISOString().split('T')[0],
       };
       localStorage.setItem(`kanban_cards_${draggedCard.boardId}`, JSON.stringify(boardCards));
-      window.location.reload();
+      emitStorageChange(`kanban_cards_${draggedCard.boardId}`);
     }
 
     setDraggedCard(null);
@@ -148,7 +149,7 @@ export default function Calendar() {
     });
   };
 
-  const handleEditCardDate = (card: CardType & { boardId: string }) => {
+  const handleEditCardDate = (card: CardType & { boardId: string; boardTitle: string }) => {
     setEditingCard(card);
     setEditDate(card.dueDate || '');
     setEditDialogOpen(true);
@@ -164,7 +165,7 @@ export default function Calendar() {
         dueDate: editDate,
       };
       localStorage.setItem(`kanban_cards_${editingCard.boardId}`, JSON.stringify(boardCards));
-      window.dispatchEvent(new CustomEvent('crm-storage-change', { detail: { key: `kanban_cards_${editingCard.boardId}` } }));
+      emitStorageChange(`kanban_cards_${editingCard.boardId}`);
     }
 
     setEditDialogOpen(false);
@@ -172,7 +173,23 @@ export default function Calendar() {
     setEditDate('');
   };
 
-  const handleCardMenuOpen = (event: React.MouseEvent<HTMLElement>, card: CardType & { boardId: string }) => {
+  const handleRemoveDate = () => {
+    if (!editingCard) return;
+
+    const boardCards = JSON.parse(localStorage.getItem(`kanban_cards_${editingCard.boardId}`) || '{}');
+    if (boardCards[editingCard.id]) {
+      const { dueDate, ...cardWithoutDate } = boardCards[editingCard.id];
+      boardCards[editingCard.id] = cardWithoutDate;
+      localStorage.setItem(`kanban_cards_${editingCard.boardId}`, JSON.stringify(boardCards));
+      emitStorageChange(`kanban_cards_${editingCard.boardId}`);
+    }
+
+    setEditDialogOpen(false);
+    setEditingCard(null);
+    setEditDate('');
+  };
+
+  const handleCardMenuOpen = (event: React.MouseEvent<HTMLElement>, card: CardType & { boardId: string; boardTitle: string }) => {
     event.stopPropagation();
     setAnchorEl(event.currentTarget);
     setSelectedCardForMenu(card);
@@ -192,37 +209,42 @@ export default function Calendar() {
   };
 
   const monthNames = [
-    'Enero',
-    'Febrero',
-    'Marzo',
-    'Abril',
-    'Mayo',
-    'Junio',
-    'Julio',
-    'Agosto',
-    'Septiembre',
-    'Octubre',
-    'Noviembre',
-    'Diciembre',
+    'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
+    'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre',
   ];
   const dayNames = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
 
   return (
     <Box sx={{ width: '100%', maxWidth: { sm: '100%', md: '1700px' } }}>
-      <Grid container spacing={3}>
-        {/* Calendario */}
-        <Grid item xs={12} md={7}>
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
+        <Typography variant="h5" component="h2" sx={{ fontWeight: 600 }}>
+          Calendario
+        </Typography>
+      </Box>
+
+      <Box sx={{ display: 'flex', gap: 3, flexDirection: { xs: 'column', md: 'row' } }}>
+        <Box sx={{ flex: { xs: '1 1 auto', md: '0 0 60%' } }}>
           <Card variant="outlined">
             <CardContent>
-              {/* Header del calendario */}
-              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-                <Button
-                  startIcon={<ChevronLeftRoundedIcon />}
-                  onClick={handlePrevMonth}
-                  size="small"
-                >
-                  Anterior
-                </Button>
+              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
+                <Box sx={{ display: 'flex', gap: 1 }}>
+                  <Button
+                    startIcon={<ChevronLeftRoundedIcon />}
+                    onClick={handlePrevMonth}
+                    size="small"
+                    variant="outlined"
+                  >
+                    Anterior
+                  </Button>
+                  <Button
+                    startIcon={<TodayRoundedIcon />}
+                    onClick={handleGoToToday}
+                    size="small"
+                    variant="text"
+                  >
+                    Hoy
+                  </Button>
+                </Box>
                 <Typography variant="h6" sx={{ fontWeight: 600 }}>
                   {monthNames[currentDate.getMonth()]} {currentDate.getFullYear()}
                 </Typography>
@@ -230,88 +252,126 @@ export default function Calendar() {
                   endIcon={<ChevronRightRoundedIcon />}
                   onClick={handleNextMonth}
                   size="small"
+                  variant="outlined"
                 >
                   Siguiente
                 </Button>
               </Box>
 
-              {/* Días de la semana */}
-              <Grid container spacing={1} sx={{ mb: 1 }}>
+              <Box
+                sx={{
+                  display: 'grid',
+                  gridTemplateColumns: 'repeat(7, 1fr)',
+                  gap: 0.5,
+                  mb: 1,
+                }}
+              >
                 {dayNames.map((day) => (
-                  <Grid item xs={12 / 7} key={day}>
-                    <Box sx={{ textAlign: 'center', fontWeight: 600, py: 1 }}>
-                      <Typography variant="caption">{day}</Typography>
-                    </Box>
-                  </Grid>
+                  <Box
+                    key={day}
+                    sx={{
+                      textAlign: 'center',
+                      fontWeight: 600,
+                      py: 1.5,
+                      backgroundColor: 'action.hover',
+                      borderRadius: 1,
+                    }}
+                  >
+                    <Typography variant="caption" sx={{ fontWeight: 600 }}>{day}</Typography>
+                  </Box>
                 ))}
-              </Grid>
+              </Box>
 
-              {/* Días del mes */}
-              <Grid container spacing={1}>
-                {[...emptyDays, ...daysArray].map((day, index) => {
+              <Box
+                sx={{
+                  display: 'grid',
+                  gridTemplateColumns: 'repeat(7, 1fr)',
+                  gap: 0.5,
+                }}
+              >
+                {allDays.map((day, index) => {
                   const isToday = day && new Date(currentDate.getFullYear(), currentDate.getMonth(), day).toDateString() === new Date().toDateString();
-                  const isPast = day && new Date(currentDate.getFullYear(), currentDate.getMonth(), day) < new Date();
+                  const isPast = day && new Date(currentDate.getFullYear(), currentDate.getMonth(), day) < new Date(new Date().setHours(0, 0, 0, 0));
+                  const dayCards = day ? getCardsForDay(day) : [];
 
                   return (
-                  <Grid item xs={12 / 7} key={index}>
                     <Paper
-                      onDragOver={(e) => e.preventDefault()}
+                      key={index}
+                      onDragOver={(e) => {
+                        e.preventDefault();
+                        e.dataTransfer.dropEffect = 'move';
+                      }}
                       onDrop={() => day && handleDropOnDay(day)}
                       sx={{
-                        minHeight: '120px',
-                        p: 1.5,
-                        backgroundColor: !day ? 'action.disabledBackground' : isToday ? 'action.selected' : 'background.paper',
-                        border: '1px solid',
-                        borderColor: isToday ? 'primary.main' : 'divider',
-                        borderWidth: isToday ? 2 : 1,
-                        cursor: draggedCard && day ? 'grab' : 'default',
-                        opacity: draggedCard && day ? 0.9 : 1,
+                        minHeight: '100px',
+                        p: 1,
+                        backgroundColor: !day ? 'action.disabledBackground' : isToday ? 'primary.50' : 'background.paper',
+                        border: '2px solid',
+                        borderColor: isToday ? 'primary.main' : draggedCard && day ? 'primary.light' : 'divider',
+                        cursor: draggedCard && day ? 'copy' : 'default',
                         transition: 'all 0.2s ease',
                         '&:hover': day ? {
-                          backgroundColor: 'action.hover',
+                          backgroundColor: draggedCard ? 'primary.50' : 'action.hover',
                           boxShadow: 1,
                           borderColor: 'primary.main',
                         } : {},
+                        borderRadius: 1,
+                        position: 'relative',
                       }}
                     >
                       {day && (
                         <>
-                          <Typography
-                            variant="caption"
-                            sx={{
-                              fontWeight: 600,
-                              display: 'block',
-                              mb: 0.5,
-                              color: isPast ? 'text.secondary' : isToday ? 'primary.main' : 'text.primary',
-                              fontSize: isToday ? '0.95rem' : '0.875rem',
-                            }}
-                          >
-                            {day}
-                          </Typography>
+                          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 0.5 }}>
+                            <Typography
+                              variant="caption"
+                              sx={{
+                                fontWeight: isToday ? 700 : 600,
+                                fontSize: isToday ? '1rem' : '0.875rem',
+                                backgroundColor: isToday ? 'primary.main' : 'transparent',
+                                color: isToday ? 'white' : isPast ? 'text.disabled' : 'text.primary',
+                                borderRadius: '50%',
+                                width: isToday ? '28px' : 'auto',
+                                height: isToday ? '28px' : 'auto',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                              }}
+                            >
+                              {day}
+                            </Typography>
+                            {dayCards.length > 2 && (
+                              <Chip
+                                label={`+${dayCards.length - 2}`}
+                                size="small"
+                                sx={{ height: '18px', fontSize: '0.65rem' }}
+                              />
+                            )}
+                          </Box>
                           <Stack spacing={0.5}>
-                            {getCardsForDay(day).map((card) => (
+                            {dayCards.slice(0, 2).map((card) => (
                               <Box
                                 key={card.id}
+                                onClick={() => {
+                                  setSelectedCardForDetails(card);
+                                  setDetailsModalOpen(true);
+                                }}
                                 sx={{
                                   backgroundColor: 'primary.main',
                                   color: 'white',
-                                  p: 0.75,
-                                  borderRadius: 1,
-                                  fontSize: '0.75rem',
+                                  p: 0.5,
+                                  borderRadius: 0.5,
+                                  fontSize: '0.7rem',
                                   overflow: 'hidden',
                                   display: 'flex',
                                   justifyContent: 'space-between',
                                   alignItems: 'center',
-                                  gap: 0.5,
+                                  gap: 0.25,
                                   cursor: 'pointer',
-                                  transition: 'all 0.2s ease',
+                                  transition: 'all 0.15s ease',
                                   '&:hover': {
                                     backgroundColor: 'primary.dark',
-                                    boxShadow: 1,
+                                    transform: 'scale(1.02)',
                                   },
-                                  position: 'relative',
-                                  group: 'card-item',
-                                  title: card.title,
                                 }}
                               >
                                 <Typography
@@ -321,76 +381,52 @@ export default function Calendar() {
                                     textOverflow: 'ellipsis',
                                     whiteSpace: 'nowrap',
                                     flex: 1,
+                                    fontSize: '0.7rem',
                                   }}
                                 >
                                   {card.title}
                                 </Typography>
-                                <Box sx={{ display: 'flex', gap: 0.25 }}>
-                                  <IconButton
-                                    size="small"
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      handleShowCardDetails();
-                                      setSelectedCardForDetails(card);
-                                      setDetailsModalOpen(true);
-                                    }}
-                                    sx={{
-                                      color: 'white',
-                                      padding: '2px',
-                                      '&:hover': {
-                                        backgroundColor: 'rgba(255, 255, 255, 0.2)',
-                                      },
-                                    }}
-                                    title="Ver detalles"
-                                  >
-                                    <InfoRoundedIcon sx={{ fontSize: '0.875rem' }} />
-                                  </IconButton>
-                                  <IconButton
-                                    size="small"
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      handleEditCardDate(card);
-                                    }}
-                                    sx={{
-                                      color: 'white',
-                                      padding: '2px',
-                                      '&:hover': {
-                                        backgroundColor: 'rgba(255, 255, 255, 0.2)',
-                                      },
-                                    }}
-                                    title="Editar fecha"
-                                  >
-                                    <EditRoundedIcon sx={{ fontSize: '0.875rem' }} />
-                                  </IconButton>
-                                </Box>
+                                <IconButton
+                                  size="small"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleEditCardDate(card);
+                                  }}
+                                  sx={{
+                                    color: 'white',
+                                    padding: '1px',
+                                    '&:hover': {
+                                      backgroundColor: 'rgba(255, 255, 255, 0.2)',
+                                    },
+                                  }}
+                                >
+                                  <EditRoundedIcon sx={{ fontSize: '0.75rem' }} />
+                                </IconButton>
                               </Box>
                             ))}
                           </Stack>
                         </>
                       )}
                     </Paper>
-                  </Grid>
                   );
                 })}
-              </Grid>
+              </Box>
             </CardContent>
           </Card>
-        </Grid>
+        </Box>
 
-        {/* Panel de actividades no programadas */}
-        <Grid item xs={12} md={5}>
+        <Box sx={{ flex: { xs: '1 1 auto', md: '0 0 38%' } }}>
           <Card variant="outlined" sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
             <CardContent sx={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'auto' }}>
-              <Typography variant="h6" sx={{ fontWeight: 600, mb: 2 }}>
-                Actividad no programada
+              <Typography variant="h6" sx={{ fontWeight: 600, mb: 1 }}>
+                Actividades sin programar
               </Typography>
               <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-                Arrastra cada actividad al calendario para establecer una fecha de vencimiento para la actividad.
+                Arrastra las actividades al calendario para asignarles una fecha.
               </Typography>
 
-              {/* Búsqueda */}
               <TextField
-                placeholder="Buscar elementos sin planificar"
+                placeholder="Buscar actividades..."
                 fullWidth
                 value={searchText}
                 onChange={(e) => setSearchText(e.target.value)}
@@ -401,15 +437,14 @@ export default function Calendar() {
                 sx={{ mb: 2 }}
               />
 
-              {/* Filtro */}
               <Button
                 variant="outlined"
                 startIcon={<FilterListRoundedIcon />}
                 onClick={() => setShowFilters(!showFilters)}
                 size="small"
-                sx={{ mb: showFilters ? 2 : 0 }}
+                sx={{ mb: 2, alignSelf: 'flex-start' }}
               >
-                Filtros
+                {showFilters ? 'Ocultar Filtros' : 'Mostrar Filtros'}
               </Button>
 
               {showFilters && (
@@ -420,7 +455,7 @@ export default function Calendar() {
                     label="Tablero"
                     onChange={(e) => setFilterBoard(e.target.value)}
                   >
-                    <MenuItem value="">Todos</MenuItem>
+                    <MenuItem value="">Todos los tableros</MenuItem>
                     {boards.map((board) => (
                       <MenuItem key={board.id} value={board.id}>
                         {board.title}
@@ -430,75 +465,78 @@ export default function Calendar() {
                 </FormControl>
               )}
 
-              {/* Lista de actividades */}
-              <Typography variant="caption" color="text.secondary" sx={{ mb: 1, display: 'block' }}>
-                Más recientes
+              <Typography variant="caption" color="text.secondary" sx={{ mb: 1, display: 'block', fontWeight: 600 }}>
+                {filteredCards.length} actividades sin fecha
               </Typography>
 
               {filteredCards.length === 0 ? (
-                <Box sx={{ textAlign: 'center', py: 3, color: 'text.secondary' }}>
-                  <Typography variant="body2">No hay actividades sin planificar</Typography>
+                <Box sx={{ textAlign: 'center', py: 4, color: 'text.secondary' }}>
+                  <TodayRoundedIcon sx={{ fontSize: 48, mb: 1, opacity: 0.5 }} />
+                  <Typography variant="body2">Todas las actividades tienen fecha asignada</Typography>
                 </Box>
               ) : (
-                <Stack spacing={1}>
+                <Stack spacing={1} sx={{ flex: 1, overflow: 'auto' }}>
                   {filteredCards.map((card) => (
                     <Paper
                       key={card.id}
                       draggable
                       onDragStart={() => handleDragStart(card)}
+                      onDragEnd={() => setDraggedCard(null)}
                       sx={{
                         p: 1.5,
                         backgroundColor: 'background.paper',
-                        border: '1px solid',
+                        border: '2px solid',
                         borderColor: draggedCard?.id === card.id ? 'primary.main' : 'divider',
+                        borderStyle: draggedCard?.id === card.id ? 'dashed' : 'solid',
                         cursor: 'grab',
+                        opacity: draggedCard?.id === card.id ? 0.5 : 1,
                         '&:hover': {
-                          boxShadow: 1,
+                          boxShadow: 2,
                           backgroundColor: 'action.hover',
+                          borderColor: 'primary.light',
                         },
                         '&:active': {
                           cursor: 'grabbing',
                         },
-                        display: 'flex',
-                        justifyContent: 'space-between',
-                        alignItems: 'flex-start',
-                        gap: 1,
+                        transition: 'all 0.15s ease',
                       }}
                     >
-                      <Box sx={{ flex: 1, minWidth: 0 }}>
-                        <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 0.5 }}>
-                          {card.title}
-                        </Typography>
-                        <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', mb: 1 }}>
-                          <Chip label={card.boardTitle} size="small" variant="outlined" />
-                          {card.priority && (
-                            <Chip
-                              label={card.priority}
-                              size="small"
-                              color={card.priority === 'alta' ? 'error' : card.priority === 'media' ? 'warning' : 'default'}
-                              variant="outlined"
-                            />
-                          )}
+                      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 1 }}>
+                        <Box sx={{ flex: 1, minWidth: 0 }}>
+                          <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 0.5 }}>
+                            {card.title}
+                          </Typography>
+                          <Box sx={{ display: 'flex', gap: 0.5, flexWrap: 'wrap', mb: 0.5 }}>
+                            <Chip label={card.boardTitle} size="small" variant="outlined" sx={{ height: '20px', fontSize: '0.7rem' }} />
+                            {card.priority && (
+                              <Chip
+                                label={card.priority}
+                                size="small"
+                                color={card.priority === 'alta' ? 'error' : card.priority === 'media' ? 'warning' : 'default'}
+                                variant="filled"
+                                sx={{ height: '20px', fontSize: '0.7rem' }}
+                              />
+                            )}
+                          </Box>
+                          <Typography variant="caption" color="text.secondary">
+                            {card.createdBy || 'Sin asignar'}
+                          </Typography>
                         </Box>
-                        <Typography variant="caption" color="text.secondary">
-                          {card.createdBy || 'Sin asignar'}
-                        </Typography>
+                        <IconButton
+                          size="small"
+                          onClick={(e) => handleCardMenuOpen(e, card)}
+                        >
+                          <MoreVertRoundedIcon fontSize="small" />
+                        </IconButton>
                       </Box>
-                      <IconButton
-                        size="small"
-                        onClick={(e) => handleCardMenuOpen(e, card)}
-                        sx={{ mt: -0.5, mr: -0.5 }}
-                      >
-                        <MoreVertRoundedIcon fontSize="small" />
-                      </IconButton>
                     </Paper>
                   ))}
                 </Stack>
               )}
             </CardContent>
           </Card>
-        </Grid>
-      </Grid>
+        </Box>
+      </Box>
 
       <Dialog open={editDialogOpen} onClose={() => setEditDialogOpen(false)} maxWidth="sm" fullWidth>
         <Box sx={{ p: 3 }}>
@@ -509,7 +547,7 @@ export default function Calendar() {
             <Stack spacing={2}>
               <Box>
                 <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1 }}>
-                  Tarjeta: {editingCard.title}
+                  {editingCard.title}
                 </Typography>
                 <Chip label={editingCard.boardTitle} size="small" variant="outlined" />
               </Box>
@@ -521,11 +559,16 @@ export default function Calendar() {
                 onChange={(e) => setEditDate(e.target.value)}
                 InputLabelProps={{ shrink: true }}
               />
-              <Box sx={{ display: 'flex', gap: 1, justifyContent: 'flex-end' }}>
-                <Button onClick={() => setEditDialogOpen(false)}>Cancelar</Button>
-                <Button variant="contained" onClick={handleSaveEditDate}>
-                  Guardar
+              <Box sx={{ display: 'flex', gap: 1, justifyContent: 'space-between' }}>
+                <Button color="error" onClick={handleRemoveDate}>
+                  Quitar Fecha
                 </Button>
+                <Box sx={{ display: 'flex', gap: 1 }}>
+                  <Button onClick={() => setEditDialogOpen(false)}>Cancelar</Button>
+                  <Button variant="contained" onClick={handleSaveEditDate}>
+                    Guardar
+                  </Button>
+                </Box>
               </Box>
             </Stack>
           )}
@@ -539,7 +582,7 @@ export default function Calendar() {
       >
         <MenuItem onClick={handleShowCardDetails}>
           <InfoRoundedIcon fontSize="small" sx={{ mr: 1 }} />
-          Info
+          Ver Detalles
         </MenuItem>
         <MenuItem
           onClick={() => {
@@ -550,7 +593,7 @@ export default function Calendar() {
           }}
         >
           <EditRoundedIcon fontSize="small" sx={{ mr: 1 }} />
-          Editar Fecha
+          Asignar Fecha
         </MenuItem>
       </Menu>
 

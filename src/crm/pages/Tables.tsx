@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import {
   Box,
   Typography,
@@ -10,13 +10,10 @@ import {
   Stack,
   Card,
   IconButton,
-  Menu,
-  MenuItem,
 } from '@mui/material';
 import AddRoundedIcon from '@mui/icons-material/AddRounded';
 import DeleteRoundedIcon from '@mui/icons-material/DeleteRounded';
 import EditRoundedIcon from '@mui/icons-material/EditRounded';
-import MoreVertRoundedIcon from '@mui/icons-material/MoreVertRounded';
 import { useLocalStorage } from '../hooks/useLocalStorage';
 import { useActivityLog } from '../hooks/useActivityLog';
 import { initialBoards } from '../data/initialData';
@@ -29,11 +26,9 @@ export default function Tables() {
   const [openDialog, setOpenDialog] = useState(false);
   const [newBoardTitle, setNewBoardTitle] = useState('');
   const [editingBoardId, setEditingBoardId] = useState<string | null>(null);
-  const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
-  const [menuBoardId, setMenuBoardId] = useState<string | null>(null);
   const { addLog } = useActivityLog();
 
-  const handleTabChange = (event: React.SyntheticEvent, newValue: number) => {
+  const handleTabChange = (_event: React.SyntheticEvent, newValue: number) => {
     setSelectedBoardIndex(newValue);
   };
 
@@ -69,7 +64,6 @@ export default function Tables() {
     setOpenDialog(false);
     setNewBoardTitle('');
     setEditingBoardId(null);
-    setAnchorEl(null);
   };
 
   const handleDeleteBoard = (boardId: string) => {
@@ -80,18 +74,7 @@ export default function Tables() {
       if (selectedBoardIndex >= boards.length - 1) {
         setSelectedBoardIndex(Math.max(0, boards.length - 2));
       }
-      setAnchorEl(null);
     }
-  };
-
-  const handleMenuOpen = (event: React.MouseEvent<HTMLElement>, boardId: string) => {
-    setAnchorEl(event.currentTarget);
-    setMenuBoardId(boardId);
-  };
-
-  const handleMenuClose = () => {
-    setAnchorEl(null);
-    setMenuBoardId(null);
   };
 
   const handleOpenEditDialog = () => {
@@ -126,7 +109,7 @@ export default function Tables() {
           <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 3 }}>
             <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', px: 2 }}>
               <Tabs value={selectedBoardIndex} onChange={handleTabChange} variant="scrollable" scrollButtons="auto" sx={{ flex: 1 }}>
-                {boards.map((board, index) => (
+                {boards.map((board) => (
                   <Tab key={board.id} label={board.title} />
                 ))}
               </Tabs>

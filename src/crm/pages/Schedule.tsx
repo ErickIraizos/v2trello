@@ -1,4 +1,4 @@
-import React, { useMemo, useState, useCallback } from 'react';
+import { useMemo, useState, useCallback } from 'react';
 import {
   Box,
   Typography,
@@ -6,27 +6,23 @@ import {
   CardContent,
   Stack,
   Chip,
-  Paper,
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableRow,
   Select,
   MenuItem,
   FormControl,
   InputLabel,
-  Button,
-  Dialog,
-  DialogTitle,
-  DialogContent,
   IconButton,
+  Tooltip,
+  Dialog,
+  TextField,
+  Button,
 } from '@mui/material';
 import EditRoundedIcon from '@mui/icons-material/EditRounded';
-import { useLocalStorage, useStorageListener } from '../hooks/useLocalStorage';
+import InfoRoundedIcon from '@mui/icons-material/InfoRounded';
+import CalendarTodayRoundedIcon from '@mui/icons-material/CalendarTodayRounded';
+import { useLocalStorage, useStorageListener, emitStorageChange } from '../hooks/useLocalStorage';
 import { initialBoards } from '../data/initialData';
 import { Board, Card as CardType } from '../types';
+import CardDetailsModal from '../components/CardDetailsModal';
 
 interface TaskWithBoard extends CardType {
   boardId: string;
@@ -35,13 +31,16 @@ interface TaskWithBoard extends CardType {
 }
 
 export default function Schedule() {
-  const [boardsList, setBoardsList] = useLocalStorage<Board[]>('crm_boards', initialBoards);
+  const [boardsList] = useLocalStorage<Board[]>('crm_boards', initialBoards);
   const [refreshTrigger, setRefreshTrigger] = useState(0);
   const [filterBoard, setFilterBoard] = useState('');
-  const [timelineView, setTimelineView] = useState<'weeks' | 'months' | 'quarters'>('months');
+  const [filterStatus, setFilterStatus] = useState('');
   const [editingTask, setEditingTask] = useState<TaskWithBoard | null>(null);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
-  const [newTaskState, setNewTaskState] = useState('');
+  const [newStartDate, setNewStartDate] = useState('');
+  const [newDueDate, setNewDueDate] = useState('');
+  const [detailsModalOpen, setDetailsModalOpen] = useState(false);
+  const [selectedCardForDetails, setSelectedCardForDetails] = useState<CardType | null>(null);
 
   const handleStorageChange = useCallback(() => {
     setRefreshTrigger((prev) => prev + 1);
@@ -49,7 +48,6 @@ export default function Schedule() {
 
   useStorageListener(handleStorageChange);
 
-  // Obtener todas las tarjetas con fechas
   const tasksWithDates = useMemo(() => {
     const tasks: TaskWithBoard[] = [];
 
@@ -78,18 +76,20 @@ export default function Schedule() {
     });
   }, [boardsList, refreshTrigger]);
 
-  // Filtrar tareas
   const filteredTasks = useMemo(() => {
-    return tasksWithDates.filter((task) => !filterBoard || task.boardId === filterBoard);
-  }, [tasksWithDates, filterBoard]);
+    return tasksWithDates.filter((task) => {
+      const boardMatch = !filterBoard || task.boardId === filterBoard;
+      const statusMatch = !filterStatus || getStatusType(task) === filterStatus;
+      return boardMatch && statusMatch;
+    });
+  }, [tasksWithDates, filterBoard, filterStatus]);
 
-  // Calcular rango de fechas
   const dateRange = useMemo(() => {
     if (filteredTasks.length === 0) {
       const today = new Date();
       return {
         start: new Date(today.getFullYear(), today.getMonth(), 1),
-        end: new Date(today.getFullYear(), today.getMonth() + 11, 30),
+        end: new Date(today.getFullYear(), today.getMonth() + 6, 0),
       };
     }
 
@@ -98,18 +98,16 @@ export default function Schedule() {
       .filter(Boolean)
       .map((d) => new Date(d!));
 
-    const start = new Date(Math.min(...dates.map((d) => d.getTime())));
-    start.setDate(1);
+    const minDate = new Date(Math.min(...dates.map((d) => d.getTime())));
+    const maxDate = new Date(Math.max(...dates.map((d) => d.getTime())));
+    
+    minDate.setDate(1);
+    maxDate.setMonth(maxDate.getMonth() + 1);
+    maxDate.setDate(0);
 
-    const end = new Date(Math.max(...dates.map((d) => d.getTime())));
-    end.setMonth(end.getMonth() + 1);
-    end.setDate(1);
-    end.setDate(0);
-
-    return { start, end };
+    return { start: minDate, end: maxDate };
   }, [filteredTasks]);
 
-  // Generar meses en el rango
   const monthsInRange = useMemo(() => {
     const months = [];
     const current = new Date(dateRange.start);
@@ -122,7 +120,6 @@ export default function Schedule() {
     return months;
   }, [dateRange]);
 
-  // Calcular ancho de la barra y posición
   const getTaskBarPosition = (task: TaskWithBoard) => {
     const startDate = task.startDate ? new Date(task.startDate) : new Date(task.dueDate!);
     const endDate = new Date(task.dueDate || task.startDate!);
@@ -132,76 +129,87 @@ export default function Schedule() {
     const taskDuration = Math.max(1, Math.ceil((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24)));
 
     return {
-      left: (taskStartDays / totalDays) * 100,
-      width: (taskDuration / totalDays) * 100,
+      left: Math.max(0, (taskStartDays / totalDays) * 100),
+      width: Math.min(100 - (taskStartDays / totalDays) * 100, (taskDuration / totalDays) * 100),
     };
   };
 
-  // Determinar color por estado
+  function getStatusType(task: TaskWithBoard): string {
+    const columnLower = task.columnTitle.toLowerCase();
+    if (columnLower.includes('completado') || columnLower.includes('ganado') || columnLower.includes('cerrado')) {
+      return 'completed';
+    }
+    if (columnLower.includes('progreso')) return 'in_progress';
+    if (columnLower.includes('revisión') || columnLower.includes('revision')) return 'review';
+    return 'pending';
+  }
+
   const getStatusColor = (task: TaskWithBoard) => {
+    const status = getStatusType(task);
     const now = new Date();
     const endDate = new Date(task.dueDate || task.startDate || '');
 
-    if (endDate < now) return '#9C27B0'; // Completado
-    if (task.columnTitle.toLowerCase().includes('completado') || task.columnTitle.toLowerCase().includes('ganado')) {
-      return '#4CAF50'; // Verde - Completado
-    }
-    if (task.columnTitle.toLowerCase().includes('progreso')) return '#2196F3'; // Azul - En progreso
-    if (task.columnTitle.toLowerCase().includes('revisión')) return '#FF9800'; // Naranja - Revisión
-    return '#757575'; // Gris - Por hacer
+    if (status === 'completed') return '#4CAF50';
+    if (endDate < now && status !== 'completed') return '#f44336';
+    if (status === 'in_progress') return '#2196F3';
+    if (status === 'review') return '#FF9800';
+    return '#9E9E9E';
   };
 
   const isTaskOverdue = (task: TaskWithBoard) => {
     const now = new Date();
+    now.setHours(0, 0, 0, 0);
     const endDate = new Date(task.dueDate || '');
-    return endDate < now && !task.columnTitle.toLowerCase().includes('completado');
+    return endDate < now && getStatusType(task) !== 'completed';
   };
 
-  const handleEditTaskProgress = (task: TaskWithBoard) => {
+  const handleEditTask = (task: TaskWithBoard) => {
     setEditingTask(task);
-    setNewTaskState(task.columnTitle);
+    setNewStartDate(task.startDate || '');
+    setNewDueDate(task.dueDate || '');
     setEditDialogOpen(true);
   };
 
-  const handleSaveTaskProgress = () => {
-    if (!editingTask || !newTaskState) return;
+  const handleSaveTaskDates = () => {
+    if (!editingTask) return;
 
-    const board = boardsList.find(b => b.id === editingTask.boardId);
-    if (!board) return;
-
-    // Encontrar la columna actual y nueva
-    const currentColumn = board.columns.find(col => col.cardIds.includes(editingTask.id));
-    const newColumn = board.columns.find(col => col.title === newTaskState);
-
-    if (!newColumn) return;
-
-    // Actualizar el board
-    const updatedBoard = { ...board };
-    updatedBoard.columns = updatedBoard.columns.map(col => ({
-      ...col,
-      cardIds: col.id === currentColumn?.id
-        ? col.cardIds.filter(id => id !== editingTask.id)
-        : col.id === newColumn.id
-        ? [...col.cardIds, editingTask.id]
-        : col.cardIds,
-    }));
-
-    const updatedBoardsList = boardsList.map(b => b.id === updatedBoard.id ? updatedBoard : b);
-    setBoardsList(updatedBoardsList);
+    const boardCards = JSON.parse(localStorage.getItem(`kanban_cards_${editingTask.boardId}`) || '{}');
+    if (boardCards[editingTask.id]) {
+      boardCards[editingTask.id] = {
+        ...boardCards[editingTask.id],
+        startDate: newStartDate || undefined,
+        dueDate: newDueDate || undefined,
+      };
+      localStorage.setItem(`kanban_cards_${editingTask.boardId}`, JSON.stringify(boardCards));
+      emitStorageChange(`kanban_cards_${editingTask.boardId}`);
+    }
 
     setEditDialogOpen(false);
     setEditingTask(null);
-    setNewTaskState('');
+    setNewStartDate('');
+    setNewDueDate('');
   };
+
+  const handleShowDetails = (task: TaskWithBoard) => {
+    setSelectedCardForDetails(task);
+    setDetailsModalOpen(true);
+  };
+
+  const stats = useMemo(() => {
+    const completed = filteredTasks.filter(t => getStatusType(t) === 'completed').length;
+    const overdue = filteredTasks.filter(t => isTaskOverdue(t)).length;
+    const inProgress = filteredTasks.filter(t => getStatusType(t) === 'in_progress').length;
+    return { completed, overdue, inProgress, total: filteredTasks.length };
+  }, [filteredTasks]);
 
   return (
     <Box sx={{ width: '100%', maxWidth: { sm: '100%', md: '1700px' } }}>
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3, flexWrap: 'wrap', gap: 2 }}>
         <Typography variant="h5" component="h2" sx={{ fontWeight: 600 }}>
           Cronograma
         </Typography>
-        <Box sx={{ display: 'flex', gap: 1 }}>
-          <FormControl size="small" sx={{ minWidth: 150 }}>
+        <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+          <FormControl size="small" sx={{ minWidth: 140 }}>
             <InputLabel>Tablero</InputLabel>
             <Select value={filterBoard} label="Tablero" onChange={(e) => setFilterBoard(e.target.value)}>
               <MenuItem value="">Todos</MenuItem>
@@ -212,48 +220,92 @@ export default function Schedule() {
               ))}
             </Select>
           </FormControl>
+          <FormControl size="small" sx={{ minWidth: 140 }}>
+            <InputLabel>Estado</InputLabel>
+            <Select value={filterStatus} label="Estado" onChange={(e) => setFilterStatus(e.target.value)}>
+              <MenuItem value="">Todos</MenuItem>
+              <MenuItem value="pending">Pendiente</MenuItem>
+              <MenuItem value="in_progress">En Progreso</MenuItem>
+              <MenuItem value="review">En Revisión</MenuItem>
+              <MenuItem value="completed">Completado</MenuItem>
+            </Select>
+          </FormControl>
         </Box>
+      </Box>
+
+      <Box sx={{ display: 'flex', gap: 2, mb: 3, flexWrap: 'wrap' }}>
+        <Card variant="outlined" sx={{ flex: '1 1 150px', minWidth: '150px' }}>
+          <CardContent sx={{ py: 1.5, px: 2, '&:last-child': { pb: 1.5 } }}>
+            <Typography variant="caption" color="text.secondary">Total Tareas</Typography>
+            <Typography variant="h5" sx={{ fontWeight: 600 }}>{stats.total}</Typography>
+          </CardContent>
+        </Card>
+        <Card variant="outlined" sx={{ flex: '1 1 150px', minWidth: '150px', borderColor: 'success.main' }}>
+          <CardContent sx={{ py: 1.5, px: 2, '&:last-child': { pb: 1.5 } }}>
+            <Typography variant="caption" color="success.main">Completadas</Typography>
+            <Typography variant="h5" sx={{ fontWeight: 600, color: 'success.main' }}>{stats.completed}</Typography>
+          </CardContent>
+        </Card>
+        <Card variant="outlined" sx={{ flex: '1 1 150px', minWidth: '150px', borderColor: 'info.main' }}>
+          <CardContent sx={{ py: 1.5, px: 2, '&:last-child': { pb: 1.5 } }}>
+            <Typography variant="caption" color="info.main">En Progreso</Typography>
+            <Typography variant="h5" sx={{ fontWeight: 600, color: 'info.main' }}>{stats.inProgress}</Typography>
+          </CardContent>
+        </Card>
+        <Card variant="outlined" sx={{ flex: '1 1 150px', minWidth: '150px', borderColor: 'error.main' }}>
+          <CardContent sx={{ py: 1.5, px: 2, '&:last-child': { pb: 1.5 } }}>
+            <Typography variant="caption" color="error.main">Vencidas</Typography>
+            <Typography variant="h5" sx={{ fontWeight: 600, color: 'error.main' }}>{stats.overdue}</Typography>
+          </CardContent>
+        </Card>
       </Box>
 
       {filteredTasks.length === 0 ? (
         <Card variant="outlined">
-          <CardContent>
-            <Typography color="text.secondary" align="center" sx={{ py: 3 }}>
+          <CardContent sx={{ py: 6, textAlign: 'center' }}>
+            <CalendarTodayRoundedIcon sx={{ fontSize: 64, color: 'text.disabled', mb: 2 }} />
+            <Typography variant="h6" color="text.secondary" sx={{ mb: 1 }}>
               No hay tareas con fechas asignadas
+            </Typography>
+            <Typography variant="body2" color="text.disabled">
+              Asigna fechas a las tarjetas en los tableros para verlas en el cronograma
             </Typography>
           </CardContent>
         </Card>
       ) : (
         <Card variant="outlined">
           <CardContent sx={{ p: 0, overflow: 'auto' }}>
-            <Box sx={{ minWidth: '1200px' }}>
-              {/* Header con meses */}
-              <Box sx={{ display: 'flex', backgroundColor: 'action.hover', borderBottom: '1px solid', borderColor: 'divider' }}>
-                <Box sx={{ minWidth: '300px', p: 2, fontWeight: 600, borderRight: '1px solid', borderColor: 'divider' }}>
-                  Tarea
+            <Box sx={{ minWidth: '900px' }}>
+              <Box sx={{ display: 'flex', backgroundColor: 'action.hover', borderBottom: '2px solid', borderColor: 'divider' }}>
+                <Box sx={{ minWidth: '280px', maxWidth: '280px', p: 2, fontWeight: 600, borderRight: '1px solid', borderColor: 'divider' }}>
+                  <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>Tarea</Typography>
                 </Box>
-                <Box sx={{ flex: 1, display: 'flex', borderLeft: '1px solid', borderColor: 'divider' }}>
+                <Box sx={{ flex: 1, display: 'flex' }}>
                   {monthsInRange.map((month, idx) => (
                     <Box
                       key={idx}
                       sx={{
                         flex: 1,
-                        p: 2,
+                        p: 1.5,
                         textAlign: 'center',
                         fontWeight: 600,
                         borderRight: idx < monthsInRange.length - 1 ? '1px solid' : 'none',
                         borderColor: 'divider',
-                        fontSize: '0.875rem',
+                        backgroundColor: month.getMonth() === new Date().getMonth() && month.getFullYear() === new Date().getFullYear() ? 'primary.50' : 'transparent',
                       }}
                     >
-                      {month.toLocaleDateString('es-ES', { month: 'short', year: '2-digit' }).toUpperCase()}
+                      <Typography variant="caption" sx={{ fontWeight: 600, textTransform: 'uppercase' }}>
+                        {month.toLocaleDateString('es-ES', { month: 'short' })}
+                      </Typography>
+                      <Typography variant="caption" sx={{ display: 'block', color: 'text.secondary', fontSize: '0.65rem' }}>
+                        {month.getFullYear()}
+                      </Typography>
                     </Box>
                   ))}
                 </Box>
               </Box>
 
-              {/* Filas de tareas */}
-              {filteredTasks.map((task) => {
+              {filteredTasks.map((task, taskIndex) => {
                 const position = getTaskBarPosition(task);
                 const barColor = getStatusColor(task);
                 const overdue = isTaskOverdue(task);
@@ -265,80 +317,108 @@ export default function Schedule() {
                       display: 'flex',
                       borderBottom: '1px solid',
                       borderColor: 'divider',
-                      minHeight: '80px',
+                      minHeight: '70px',
                       alignItems: 'center',
+                      backgroundColor: taskIndex % 2 === 0 ? 'transparent' : 'action.hover',
+                      '&:hover': {
+                        backgroundColor: 'action.selected',
+                      },
+                      transition: 'background-color 0.15s ease',
                     }}
                   >
-                    {/* Nombre de la tarea */}
                     <Box
                       sx={{
-                        minWidth: '300px',
-                        p: 2,
+                        minWidth: '280px',
+                        maxWidth: '280px',
+                        p: 1.5,
                         borderRight: '1px solid',
                         borderColor: 'divider',
-                        maxWidth: '300px',
                       }}
                     >
-                      <Typography variant="body2" sx={{ fontWeight: 600, mb: 0.5 }}>
-                        {task.title}
-                      </Typography>
-                      <Box sx={{ display: 'flex', gap: 0.5, mb: 0.5, flexWrap: 'wrap' }}>
-                        <Chip label={task.boardTitle} size="small" variant="outlined" />
-                        {task.priority && (
-                          <Chip
-                            label={task.priority}
-                            size="small"
-                            color={task.priority === 'alta' ? 'error' : task.priority === 'media' ? 'warning' : 'default'}
-                            variant="outlined"
-                          />
-                        )}
+                      <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 1 }}>
+                        <Box sx={{ flex: 1, minWidth: 0 }}>
+                          <Typography variant="body2" sx={{ fontWeight: 600, mb: 0.5, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            {task.title}
+                          </Typography>
+                          <Box sx={{ display: 'flex', gap: 0.5, flexWrap: 'wrap' }}>
+                            <Chip label={task.boardTitle} size="small" variant="outlined" sx={{ height: '20px', fontSize: '0.65rem' }} />
+                            {task.priority && (
+                              <Chip
+                                label={task.priority}
+                                size="small"
+                                color={task.priority === 'alta' ? 'error' : task.priority === 'media' ? 'warning' : 'default'}
+                                sx={{ height: '20px', fontSize: '0.65rem' }}
+                              />
+                            )}
+                            {overdue && (
+                              <Chip label="Vencido" size="small" color="error" sx={{ height: '20px', fontSize: '0.65rem' }} />
+                            )}
+                          </Box>
+                        </Box>
+                        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.25 }}>
+                          <Tooltip title="Ver detalles">
+                            <IconButton size="small" onClick={() => handleShowDetails(task)} sx={{ p: 0.5 }}>
+                              <InfoRoundedIcon sx={{ fontSize: '1rem' }} />
+                            </IconButton>
+                          </Tooltip>
+                          <Tooltip title="Editar fechas">
+                            <IconButton size="small" onClick={() => handleEditTask(task)} sx={{ p: 0.5 }}>
+                              <EditRoundedIcon sx={{ fontSize: '1rem' }} />
+                            </IconButton>
+                          </Tooltip>
+                        </Box>
                       </Box>
-                      {overdue && (
-                        <Chip label="Vencido" size="small" color="error" variant="filled" />
-                      )}
                     </Box>
 
-                    {/* Barra de timeline */}
                     <Box
                       sx={{
                         flex: 1,
-                        p: 2,
                         position: 'relative',
-                        height: '100%',
+                        height: '50px',
                         display: 'flex',
                         alignItems: 'center',
+                        px: 1,
                       }}
                     >
-                      <Box
-                        onClick={() => handleEditTaskProgress(task)}
-                        sx={{
-                          position: 'absolute',
-                          left: `${position.left}%`,
-                          width: `${position.width}%`,
-                          minWidth: '80px',
-                          height: '40px',
-                          backgroundColor: barColor,
-                          borderRadius: '4px',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'space-between',
-                          px: 1,
-                          cursor: 'pointer',
-                          transition: 'all 0.2s ease',
-                          '&:hover': {
-                            boxShadow: 3,
-                            opacity: 0.95,
-                            transform: 'translateY(-2px)',
-                          },
-                          color: 'white',
-                          fontSize: '0.7rem',
-                          fontWeight: 600,
-                          overflow: 'hidden',
-                          title: task.title,
-                          gap: 0.5,
-                        }}
+                      <Tooltip
+                        title={
+                          <Box>
+                            <Typography variant="caption" sx={{ display: 'block' }}>
+                              {task.startDate && `Inicio: ${new Date(task.startDate).toLocaleDateString('es-ES')}`}
+                            </Typography>
+                            <Typography variant="caption" sx={{ display: 'block' }}>
+                              {task.dueDate && `Vence: ${new Date(task.dueDate).toLocaleDateString('es-ES')}`}
+                            </Typography>
+                            <Typography variant="caption" sx={{ display: 'block' }}>
+                              Estado: {task.columnTitle}
+                            </Typography>
+                          </Box>
+                        }
                       >
-                        {task.dueDate && (
+                        <Box
+                          onClick={() => handleEditTask(task)}
+                          sx={{
+                            position: 'absolute',
+                            left: `${position.left}%`,
+                            width: `${Math.max(position.width, 3)}%`,
+                            minWidth: '60px',
+                            height: '32px',
+                            backgroundColor: barColor,
+                            borderRadius: '6px',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            px: 1,
+                            cursor: 'pointer',
+                            transition: 'all 0.2s ease',
+                            boxShadow: 1,
+                            '&:hover': {
+                              boxShadow: 3,
+                              transform: 'translateY(-2px) scale(1.02)',
+                              filter: 'brightness(1.1)',
+                            },
+                          }}
+                        >
                           <Typography
                             variant="caption"
                             sx={{
@@ -346,53 +426,14 @@ export default function Schedule() {
                               fontWeight: 600,
                               fontSize: '0.65rem',
                               whiteSpace: 'nowrap',
+                              overflow: 'hidden',
+                              textOverflow: 'ellipsis',
                             }}
                           >
-                            {new Date(task.dueDate).toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit' })}
+                            {task.dueDate && new Date(task.dueDate).toLocaleDateString('es-ES', { day: '2-digit', month: 'short' })}
                           </Typography>
-                        )}
-                        <IconButton
-                          size="small"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleEditTaskProgress(task);
-                          }}
-                          sx={{
-                            color: 'white',
-                            padding: '2px',
-                            marginLeft: 'auto',
-                            '&:hover': {
-                              backgroundColor: 'rgba(255, 255, 255, 0.2)',
-                            },
-                          }}
-                          title="Editar progreso"
-                        >
-                          <EditRoundedIcon sx={{ fontSize: '0.875rem' }} />
-                        </IconButton>
-                      </Box>
-
-                      {/* Indicadores de progreso */}
-                      {task.columnTitle.toLowerCase().includes('completado') && (
-                        <Box
-                          sx={{
-                            position: 'absolute',
-                            right: `calc(${100 - position.left - position.width}% - 5px)`,
-                            width: '20px',
-                            height: '20px',
-                            borderRadius: '50%',
-                            backgroundColor: '#4CAF50',
-                            border: '2px solid white',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            fontSize: '10px',
-                            color: 'white',
-                            fontWeight: 'bold',
-                          }}
-                        >
-                          ✓
                         </Box>
-                      )}
+                      </Tooltip>
                     </Box>
                   </Box>
                 );
@@ -402,34 +443,82 @@ export default function Schedule() {
         </Card>
       )}
 
-      {/* Legend */}
       <Box sx={{ mt: 3, p: 2, backgroundColor: 'action.hover', borderRadius: 1 }}>
-        <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1 }}>
-          Leyenda:
+        <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1.5 }}>
+          Leyenda de Estados
         </Typography>
-        <Stack direction="row" spacing={2} sx={{ flexWrap: 'wrap' }}>
+        <Stack direction="row" spacing={3} sx={{ flexWrap: 'wrap', gap: 1 }}>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-            <Box sx={{ width: '20px', height: '20px', backgroundColor: '#4CAF50', borderRadius: '2px' }} />
+            <Box sx={{ width: '16px', height: '16px', backgroundColor: '#4CAF50', borderRadius: '4px' }} />
             <Typography variant="caption">Completado</Typography>
           </Box>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-            <Box sx={{ width: '20px', height: '20px', backgroundColor: '#2196F3', borderRadius: '2px' }} />
+            <Box sx={{ width: '16px', height: '16px', backgroundColor: '#2196F3', borderRadius: '4px' }} />
             <Typography variant="caption">En Progreso</Typography>
           </Box>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-            <Box sx={{ width: '20px', height: '20px', backgroundColor: '#FF9800', borderRadius: '2px' }} />
-            <Typography variant="caption">Revisión</Typography>
+            <Box sx={{ width: '16px', height: '16px', backgroundColor: '#FF9800', borderRadius: '4px' }} />
+            <Typography variant="caption">En Revisión</Typography>
           </Box>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-            <Box sx={{ width: '20px', height: '20px', backgroundColor: '#757575', borderRadius: '2px' }} />
-            <Typography variant="caption">Por Hacer</Typography>
+            <Box sx={{ width: '16px', height: '16px', backgroundColor: '#9E9E9E', borderRadius: '4px' }} />
+            <Typography variant="caption">Pendiente</Typography>
           </Box>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-            <Box sx={{ width: '20px', height: '20px', backgroundColor: '#9C27B0', borderRadius: '2px' }} />
+            <Box sx={{ width: '16px', height: '16px', backgroundColor: '#f44336', borderRadius: '4px' }} />
             <Typography variant="caption">Vencido</Typography>
           </Box>
         </Stack>
       </Box>
+
+      <Dialog open={editDialogOpen} onClose={() => setEditDialogOpen(false)} maxWidth="sm" fullWidth>
+        <Box sx={{ p: 3 }}>
+          <Typography variant="h6" sx={{ mb: 2 }}>
+            Editar Fechas de la Tarea
+          </Typography>
+          {editingTask && (
+            <Stack spacing={2}>
+              <Box>
+                <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1 }}>
+                  {editingTask.title}
+                </Typography>
+                <Box sx={{ display: 'flex', gap: 1 }}>
+                  <Chip label={editingTask.boardTitle} size="small" variant="outlined" />
+                  <Chip label={editingTask.columnTitle} size="small" color="primary" variant="outlined" />
+                </Box>
+              </Box>
+              <TextField
+                label="Fecha de Inicio"
+                fullWidth
+                type="date"
+                value={newStartDate}
+                onChange={(e) => setNewStartDate(e.target.value)}
+                InputLabelProps={{ shrink: true }}
+              />
+              <TextField
+                label="Fecha de Vencimiento"
+                fullWidth
+                type="date"
+                value={newDueDate}
+                onChange={(e) => setNewDueDate(e.target.value)}
+                InputLabelProps={{ shrink: true }}
+              />
+              <Box sx={{ display: 'flex', gap: 1, justifyContent: 'flex-end' }}>
+                <Button onClick={() => setEditDialogOpen(false)}>Cancelar</Button>
+                <Button variant="contained" onClick={handleSaveTaskDates}>
+                  Guardar
+                </Button>
+              </Box>
+            </Stack>
+          )}
+        </Box>
+      </Dialog>
+
+      <CardDetailsModal
+        open={detailsModalOpen}
+        card={selectedCardForDetails}
+        onClose={() => setDetailsModalOpen(false)}
+      />
     </Box>
   );
 }

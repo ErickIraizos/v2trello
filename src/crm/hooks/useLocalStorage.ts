@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 
 const STORAGE_CHANGE_EVENT = 'crm-storage-change';
 
@@ -8,27 +8,41 @@ export function emitStorageChange(key: string) {
   }
 }
 
-export function useLocalStorage<T>(key: string, initialValue: T): [T, (value: T) => void] {
+function readFromStorage<T>(key: string, initialValue: T): T {
+  if (typeof window === 'undefined') {
+    return initialValue;
+  }
+  try {
+    const item = window.localStorage.getItem(key);
+    return item ? JSON.parse(item) : initialValue;
+  } catch (error) {
+    console.error(`Error reading localStorage key "${key}":`, error);
+    return initialValue;
+  }
+}
+
+export function useLocalStorage<T>(key: string, initialValue: T): [T, (value: T | ((prev: T) => T)) => void] {
+  const initialValueRef = useRef(initialValue);
+  
   const [storedValue, setStoredValue] = useState<T>(() => {
-    if (typeof window === 'undefined') {
-      return initialValue;
-    }
-    try {
-      const item = window.localStorage.getItem(key);
-      return item ? JSON.parse(item) : initialValue;
-    } catch (error) {
-      console.error(`Error reading localStorage key "${key}":`, error);
-      return initialValue;
-    }
+    return readFromStorage(key, initialValue);
   });
 
-  const setValue = useCallback((value: T) => {
+  useEffect(() => {
+    const newValue = readFromStorage(key, initialValueRef.current);
+    setStoredValue(newValue);
+  }, [key]);
+
+  const setValue = useCallback((value: T | ((prev: T) => T)) => {
     try {
-      setStoredValue(value);
-      if (typeof window !== 'undefined') {
-        window.localStorage.setItem(key, JSON.stringify(value));
-        emitStorageChange(key);
-      }
+      setStoredValue((prevValue) => {
+        const valueToStore = value instanceof Function ? value(prevValue) : value;
+        if (typeof window !== 'undefined') {
+          window.localStorage.setItem(key, JSON.stringify(valueToStore));
+          emitStorageChange(key);
+        }
+        return valueToStore;
+      });
     } catch (error) {
       console.error(`Error setting localStorage key "${key}":`, error);
     }
@@ -37,9 +51,13 @@ export function useLocalStorage<T>(key: string, initialValue: T): [T, (value: T)
   return [storedValue, setValue];
 }
 
-export function useStorageListener(callback: () => void) {
+export function useStorageListener(callback: () => void, filterKey?: string) {
   useEffect(() => {
-    const handleStorageChange = () => {
+    const handleStorageChange = (event: Event) => {
+      const customEvent = event as CustomEvent<{ key: string }>;
+      if (filterKey && customEvent.detail?.key !== filterKey) {
+        return;
+      }
       callback();
     };
 
@@ -47,5 +65,5 @@ export function useStorageListener(callback: () => void) {
     return () => {
       window.removeEventListener(STORAGE_CHANGE_EVENT, handleStorageChange);
     };
-  }, [callback]);
+  }, [callback, filterKey]);
 }
