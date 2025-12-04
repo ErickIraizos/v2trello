@@ -11,6 +11,10 @@ export interface Card {
   startDate?: string;
   dueDate?: string;
   createdBy?: string;
+  progress?: number;
+  status?: 'pending' | 'in_progress' | 'review' | 'completed' | 'overdue';
+  parentId?: string;
+  subtasks?: string[];
 }
 
 export interface Column {
