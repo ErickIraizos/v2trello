@@ -8,6 +8,7 @@ import Stack from "@mui/material/Stack";
 import Typography from "@mui/material/Typography";
 import ArrowUpwardRoundedIcon from "@mui/icons-material/ArrowUpwardRounded";
 import ArrowDownwardRoundedIcon from "@mui/icons-material/ArrowDownwardRounded";
+import RemoveRoundedIcon from "@mui/icons-material/RemoveRounded";
 import { SparkLineChart } from "@mui/x-charts/SparkLineChart";
 import { areaElementClasses } from "@mui/x-charts/LineChart";
 
@@ -15,7 +16,7 @@ export type CrmStatCardProps = {
   title: string;
   value: string;
   interval: string;
-  trend: "up" | "down";
+  trend: "up" | "down" | "neutral";
   trendValue: string;
   data: number[];
 };
@@ -50,16 +51,22 @@ export default function CrmStatCard({
       theme.palette.mode === "light"
         ? theme.palette.error.main
         : theme.palette.error.dark,
+    neutral:
+      theme.palette.mode === "light"
+        ? theme.palette.primary.main
+        : theme.palette.primary.dark,
   };
 
   const labelColors = {
     up: "success" as const,
     down: "error" as const,
+    neutral: "primary" as const,
   };
 
   const trendIcons = {
     up: <ArrowUpwardRoundedIcon fontSize="small" />,
     down: <ArrowDownwardRoundedIcon fontSize="small" />,
+    neutral: <RemoveRoundedIcon fontSize="small" />,
   };
 
   const color = labelColors[trend];
@@ -117,7 +124,7 @@ export default function CrmStatCard({
                 scaleType: "band",
                 data: Array.from(
                   { length: data.length },
-                  (_, i) => `Day ${i + 1}`,
+                  (_, i) => `Day ${i + 1}`
                 ),
               }}
               sx={{

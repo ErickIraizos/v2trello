@@ -1,4 +1,5 @@
 import * as React from "react";
+import { useMemo, useState, useEffect } from "react";
 import { useTheme } from "@mui/material/styles";
 import Box from "@mui/material/Box";
 import Card from "@mui/material/Card";
@@ -8,22 +9,37 @@ import Stack from "@mui/material/Stack";
 import ToggleButtonGroup from "@mui/material/ToggleButtonGroup";
 import ToggleButton from "@mui/material/ToggleButton";
 import { BarChart } from "@mui/x-charts/BarChart";
+import { useLocalStorage } from "../hooks/useLocalStorage";
+import { initialBoards, defaultBoardCards } from "../data/initialData";
+import { Board } from "../types";
 
 export default function CrmSalesChart() {
   const theme = useTheme();
   const [timeRange, setTimeRange] = React.useState("year");
+  const [boardsList] = useLocalStorage<Board[]>("crm_boards", initialBoards);
+  const [refreshTrigger, setRefreshTrigger] = useState(0);
+
+  useEffect(() => {
+    boardsList.forEach((board) => {
+      const isDefaultBoard = initialBoards.some((b) => b.id === board.id);
+      const key = `kanban_cards_${board.id}`;
+      const existing = localStorage.getItem(key);
+      if (!existing && isDefaultBoard) {
+        localStorage.setItem(key, JSON.stringify(defaultBoardCards));
+      }
+    });
+    setRefreshTrigger((prev) => prev + 1);
+  }, [boardsList]);
 
   const handleTimeRangeChange = (
-    event: React.MouseEvent<HTMLElement>,
-    newTimeRange: string | null,
+    _: React.MouseEvent<HTMLElement>,
+    newTimeRange: string | null
   ) => {
     if (newTimeRange !== null) {
       setTimeRange(newTimeRange);
     }
   };
 
-  // Generate monthly data
-  const currentYear = new Date().getFullYear();
   const monthNames = [
     "Ene",
     "Feb",
@@ -39,49 +55,57 @@ export default function CrmSalesChart() {
     "Dic",
   ];
 
-  // Sample data (in a real app this would come from an API)
-  const salesData = [
-    180000, 210000, 250000, 220000, 270000, 310000, 330000, 350000, 390000,
-    410000, 430000, 470000,
-  ];
-  const targetsData = [
-    200000, 220000, 240000, 260000, 280000, 300000, 320000, 340000, 360000,
-    380000, 400000, 450000,
-  ];
-  const projectedData = [
-    null,
-    null,
-    null,
-    null,
-    null,
-    null,
-    null,
-    null,
-    null,
-    null,
-    450000,
-    500000,
-  ];
+  const taskStats = useMemo(() => {
+    let completedTasks = 0;
+    let pendingTasks = 0;
+    let inProgressTasks = 0;
+
+    boardsList.forEach((board) => {
+      const boardCards = JSON.parse(
+        localStorage.getItem(`kanban_cards_${board.id}`) || "{}"
+      );
+
+      board.columns.forEach((column) => {
+        const columnLower = column.title.toLowerCase();
+        column.cardIds.forEach((cardId) => {
+          const card = boardCards[cardId];
+          if (card) {
+            if (
+              card.status === "completed" ||
+              columnLower.includes("completado") ||
+              columnLower.includes("ganado") ||
+              columnLower.includes("cerrado")
+            ) {
+              completedTasks++;
+            } else if (
+              columnLower.includes("progreso") ||
+              card.status === "in_progress"
+            ) {
+              inProgressTasks++;
+            } else {
+              pendingTasks++;
+            }
+          }
+        });
+      });
+    });
+
+    return { completedTasks, pendingTasks, inProgressTasks };
+  }, [boardsList, refreshTrigger]);
+
+  const completedData = monthNames.map((_, i) =>
+    Math.floor(taskStats.completedTasks * (0.3 + i * 0.06))
+  );
+  const inProgressData = monthNames.map((_, i) =>
+    Math.floor(taskStats.inProgressTasks * (0.5 + Math.sin(i / 2) * 0.3))
+  );
+  const pendingData = monthNames.map((_, i) =>
+    Math.max(1, Math.floor(taskStats.pendingTasks * (1 - i * 0.05)))
+  );
 
   const xAxisData = {
     scaleType: "band" as const,
     data: monthNames,
-    tickLabelStyle: {
-      angle: 0,
-      textAnchor: "middle",
-      fontSize: 12,
-    },
-  };
-
-  // Format y-axis labels to show $ and K for thousands
-  const formatYAxis = (value: number) => {
-    if (value >= 1000000) {
-      return `$${(value / 1000000).toFixed(1)}M`;
-    }
-    if (value >= 1000) {
-      return `$${(value / 1000).toFixed(0)}K`;
-    }
-    return `$${value}`;
   };
 
   return (
@@ -104,7 +128,7 @@ export default function CrmSalesChart() {
           sx={{ mb: 2 }}
         >
           <Typography variant="h6" component="h3">
-            Desempeño de Ventas
+            Progreso de Tareas
           </Typography>
           <ToggleButtonGroup
             size="small"
@@ -129,36 +153,32 @@ export default function CrmSalesChart() {
           <BarChart
             series={[
               {
-                data: salesData,
-                label: "Ventas Reales",
+                data: completedData,
+                label: "Completadas",
+                color: theme.palette.success.main,
+              },
+              {
+                data: inProgressData,
+                label: "En Progreso",
                 color: theme.palette.primary.main,
-                valueFormatter: (value) => (value ? formatYAxis(value) : ""),
               },
               {
-                data: targetsData,
-                label: "Objetivos",
+                data: pendingData,
+                label: "Pendientes",
                 color: theme.palette.grey[400],
-                valueFormatter: (value) => (value ? formatYAxis(value) : ""),
-              },
-              {
-                data: projectedData,
-                label: "Proyectado",
-                color: theme.palette.secondary.main,
-                valueFormatter: (value) => (value ? formatYAxis(value) : ""),
               },
             ]}
             xAxis={[xAxisData]}
             yAxis={[
               {
-                label: "Ingresos",
-                valueFormatter: formatYAxis,
+                label: "Tareas",
               },
             ]}
             height={300}
-            margin={{ top: 10, bottom: 30, left: 60, right: 10 }}
+            margin={{ top: 10, bottom: 30, left: 50, right: 10 }}
             slotProps={{
               legend: {
-                position: { vertical: "top", horizontal: "middle" },
+                position: { vertical: "top", horizontal: "center" },
                 itemMarkWidth: 10,
                 itemMarkHeight: 10,
                 markGap: 5,
