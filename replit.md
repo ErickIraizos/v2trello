@@ -6,6 +6,14 @@ This is a Material UI showcase application built with React, TypeScript, Vite, a
 **Current State**: Successfully configured and running in Replit environment. The CRM Dashboard is the default landing page.
 
 ## Recent Changes
+- **December 4, 2025**: Critical bug fixes and enhancements
+  - Fixed useLocalStorage hook to re-read from storage when key changes (root cause of cards disappearing when switching boards)
+  - Calendar: Removed window.location.reload() - now uses proper state management with custom storage events
+  - Calendar: Replaced deprecated MUI Grid with CSS Grid layout
+  - Calendar: Added "Today" button and "Remove Date" feature
+  - Schedule (Cronograma): Added stats cards, filtering by board/status, improved timeline visualization
+  - Fixed TypeScript type consistency across handlers
+  
 - **December 4, 2025**: Initial Replit setup completed
   - Configured Vite to bind to 0.0.0.0:5000 for Replit proxy compatibility
   - Set up HMR with clientPort 443 for hot module replacement
