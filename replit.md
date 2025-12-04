@@ -6,6 +6,19 @@ This is a Material UI showcase application built with React, TypeScript, Vite, a
 **Current State**: Successfully configured and running in Replit environment. The CRM Dashboard is the default landing page.
 
 ## Recent Changes
+- **December 4, 2025**: Cronograma (Schedule) complete redesign as Gantt Chart
+  - Redesigned as professional Gantt chart with timeline visualization
+  - Added task IDs (TBT-XX format) for each task
+  - Added checkboxes to mark tasks as completed/pending
+  - Implemented clickable progress bars - click anywhere on the bar to adjust progress
+  - Added editable task status (pending, in progress, review, completed, overdue)
+  - Added user avatars on progress bars showing task creator
+  - Implemented hierarchical task structure with parent/child relationships
+  - Added expand/collapse functionality for task groups
+  - Added view mode toggle (Weeks, Months, Quarters)
+  - Added edit dialog with progress slider and status dropdown
+  - Added Card types with progress, status, parentId, subtasks fields
+
 - **December 4, 2025**: Critical bug fixes and enhancements
   - Fixed useLocalStorage hook to re-read from storage when key changes (root cause of cards disappearing when switching boards)
   - Calendar: Removed window.location.reload() - now uses proper state management with custom storage events
