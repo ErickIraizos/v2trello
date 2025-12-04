@@ -6,6 +6,15 @@ This is a Material UI showcase application built with React, TypeScript, Vite, a
 **Current State**: Successfully configured and running in Replit environment. The CRM Dashboard is the default landing page.
 
 ## Recent Changes
+- **December 4, 2025**: Complete dashboard transformation to task management theme
+  - Transformed CrmMainDashboard from sales/CRM theme to task management theme
+  - Updated stat cards: Total de Tareas, Tareas Completadas, En Progreso, Tareas Vencidas
+  - Changed CrmSalesChart to show "Progreso de Tareas" with Completadas/En Progreso/Pendientes bars
+  - Changed CrmLeadsBySourceChart to show "Tareas por Estado" pie chart with status distribution
+  - Updated CrmRecentDealsTable to show recent tasks instead of deals
+  - Added "Nueva Tarea" and "Nuevo Tablero" buttons to the header
+  - Fixed LSP/TypeScript errors in chart components
+
 - **December 4, 2025**: Cronograma (Schedule) complete redesign as Gantt Chart
   - Redesigned as professional Gantt chart with timeline visualization
   - Added task IDs (TBT-XX format) for each task
