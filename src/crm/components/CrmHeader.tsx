@@ -1,4 +1,3 @@
-import * as React from "react";
 import Stack from "@mui/material/Stack";
 import Typography from "@mui/material/Typography";
 import NotificationsRoundedIcon from "@mui/icons-material/NotificationsRounded";
@@ -6,8 +5,7 @@ import MenuButton from "../../dashboard/components/MenuButton";
 import ColorModeIconDropdown from "../../shared-theme/ColorModeIconDropdown";
 import CrmSearch from "./CrmSearch";
 import CrmNavbarBreadcrumbs from "./CrmNavbarBreadcrumbs";
-import Button from "@mui/material/Button";
-import CalendarTodayRoundedIcon from "@mui/icons-material/CalendarTodayRounded";
+import CrmDateRangePicker from "./CrmDateRangePicker";
 
 export default function CrmHeader() {
   return (
@@ -31,13 +29,7 @@ export default function CrmHeader() {
       </Stack>
       <Stack direction="row" sx={{ gap: 1 }}>
         <CrmSearch />
-        <Button
-          variant="outlined"
-          size="small"
-          startIcon={<CalendarTodayRoundedIcon />}
-        >
-          Este Mes
-        </Button>
+        <CrmDateRangePicker />
         <MenuButton showBadge aria-label="Open notifications">
           <NotificationsRoundedIcon />
         </MenuButton>
