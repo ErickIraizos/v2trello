@@ -19,6 +19,7 @@ import History from "./pages/History";
 import Lists from "./pages/Lists";
 import Calendar from "./pages/Calendar";
 import Settings from "./pages/Settings";
+import Help from "./pages/Help";
 import AppTheme from "../shared-theme/AppTheme";
 import {
   chartsCustomizations,
@@ -71,6 +72,7 @@ export default function CrmDashboard() {
               <Route path="lists" element={<Lists />} />
               <Route path="calendar" element={<Calendar />} />
               <Route path="settings" element={<Settings />} />
+              <Route path="help" element={<Help />} />
             </Routes>
             <Outlet />
           </Stack>
