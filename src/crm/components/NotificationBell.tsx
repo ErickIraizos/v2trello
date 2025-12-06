@@ -21,8 +21,10 @@ import ErrorRoundedIcon from "@mui/icons-material/ErrorRounded";
 import DoneAllRoundedIcon from "@mui/icons-material/DoneAllRounded";
 import { useNotifications, Notification } from "../context/NotificationContext";
 
-function formatTimeAgo(date: Date): string {
+function formatTimeAgo(dateInput: string | Date): string {
   const now = new Date();
+  const date = typeof dateInput === 'string' ? new Date(dateInput) : dateInput;
+  if (isNaN(date.getTime())) return "";
   const diffMs = now.getTime() - date.getTime();
   const diffMins = Math.floor(diffMs / 60000);
   const diffHours = Math.floor(diffMs / 3600000);

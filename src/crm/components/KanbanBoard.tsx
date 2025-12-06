@@ -6,6 +6,7 @@ import KanbanColumn from './KanbanColumn';
 import { useLocalStorage, useStorageListener } from '../hooks/useLocalStorage';
 import { useActivityLog } from '../hooks/useActivityLog';
 import { defaultBoardCards, initialBoards } from '../data/initialData';
+import { addNotificationToStorage } from '../context/NotificationContext';
 
 interface KanbanBoardProps {
   board: Board;
@@ -115,6 +116,14 @@ export default function KanbanBoard({ board, onBoardUpdate }: KanbanBoardProps) 
 
     onBoardUpdate?.(updatedBoard);
     addLog('Crear', 'Tarjeta', newCard.title, cardId, { tablero: board.title });
+    
+    addNotificationToStorage({
+      title: 'Nueva tarjeta creada',
+      body: `Se creó la tarjeta "${newCard.title}" en el tablero "${board.title}"`,
+      type: 'success',
+      link: '/lists',
+    });
+    
     setOpenDialog(false);
     setNewCard({ title: '', description: '', customer: '', value: '', startDate: '', dueDate: '', createdBy: '' });
   };

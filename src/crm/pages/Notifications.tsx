@@ -9,6 +9,15 @@ import Button from "@mui/material/Button";
 import Divider from "@mui/material/Divider";
 import Tabs from "@mui/material/Tabs";
 import Tab from "@mui/material/Tab";
+import Dialog from "@mui/material/Dialog";
+import DialogTitle from "@mui/material/DialogTitle";
+import DialogContent from "@mui/material/DialogContent";
+import DialogActions from "@mui/material/DialogActions";
+import TextField from "@mui/material/TextField";
+import FormControl from "@mui/material/FormControl";
+import InputLabel from "@mui/material/InputLabel";
+import Select from "@mui/material/Select";
+import MenuItem from "@mui/material/MenuItem";
 import { useState } from "react";
 import NotificationsRoundedIcon from "@mui/icons-material/NotificationsRounded";
 import CheckCircleRoundedIcon from "@mui/icons-material/CheckCircleRounded";
@@ -17,11 +26,14 @@ import WarningRoundedIcon from "@mui/icons-material/WarningRounded";
 import ErrorRoundedIcon from "@mui/icons-material/ErrorRounded";
 import DeleteRoundedIcon from "@mui/icons-material/DeleteRounded";
 import DoneAllRoundedIcon from "@mui/icons-material/DoneAllRounded";
+import AddRoundedIcon from "@mui/icons-material/AddRounded";
 import { useNotifications, Notification } from "../context/NotificationContext";
 import { useNavigate } from "react-router-dom";
 
-function formatTimeAgo(date: Date): string {
+function formatTimeAgo(dateInput: string | Date): string {
   const now = new Date();
+  const date = typeof dateInput === 'string' ? new Date(dateInput) : dateInput;
+  if (isNaN(date.getTime())) return "";
   const diffMs = now.getTime() - date.getTime();
   const diffMins = Math.floor(diffMs / 60000);
   const diffHours = Math.floor(diffMs / 3600000);
@@ -111,24 +123,54 @@ function NotificationItem({
 }
 
 export default function Notifications() {
-  const { notifications, unreadCount, markAsRead, markAllAsRead, deleteNotification, clearAll } =
+  const { notifications, unreadCount, markAsRead, markAllAsRead, deleteNotification, clearAll, addNotification } =
     useNotifications();
   const navigate = useNavigate();
   const [tabValue, setTabValue] = useState(0);
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [newNotification, setNewNotification] = useState({
+    title: "",
+    body: "",
+    type: "info" as Notification["type"],
+    link: "",
+  });
 
   const filteredNotifications =
     tabValue === 0 ? notifications : notifications.filter((n) => !n.read);
 
+  const handleCreateNotification = () => {
+    if (!newNotification.title || !newNotification.body) return;
+    
+    addNotification({
+      title: newNotification.title,
+      body: newNotification.body,
+      type: newNotification.type,
+      link: newNotification.link || undefined,
+    });
+    
+    setNewNotification({ title: "", body: "", type: "info", link: "" });
+    setDialogOpen(false);
+  };
+
   return (
     <Box sx={{ width: "100%", maxWidth: { sm: "100%", md: "1700px" } }}>
-      <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 3 }}>
-        <NotificationsRoundedIcon sx={{ fontSize: 32 }} color="primary" />
-        <Typography component="h1" variant="h4" fontWeight="bold">
-          Notificaciones
-        </Typography>
-        {unreadCount > 0 && (
-          <Chip label={`${unreadCount} sin leer`} color="primary" size="small" />
-        )}
+      <Stack direction="row" spacing={1} alignItems="center" justifyContent="space-between" sx={{ mb: 3 }}>
+        <Stack direction="row" spacing={1} alignItems="center">
+          <NotificationsRoundedIcon sx={{ fontSize: 32 }} color="primary" />
+          <Typography component="h1" variant="h4" fontWeight="bold">
+            Notificaciones
+          </Typography>
+          {unreadCount > 0 && (
+            <Chip label={`${unreadCount} sin leer`} color="primary" size="small" />
+          )}
+        </Stack>
+        <Button
+          variant="contained"
+          startIcon={<AddRoundedIcon />}
+          onClick={() => setDialogOpen(true)}
+        >
+          Nueva Notificación
+        </Button>
       </Stack>
 
       <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 3 }}>
@@ -185,6 +227,59 @@ export default function Notifications() {
           />
         ))
       )}
+
+      <Dialog open={dialogOpen} onClose={() => setDialogOpen(false)} maxWidth="sm" fullWidth>
+        <DialogTitle>Crear Nueva Notificación</DialogTitle>
+        <DialogContent>
+          <Stack spacing={2} sx={{ pt: 1 }}>
+            <TextField
+              label="Título"
+              fullWidth
+              value={newNotification.title}
+              onChange={(e) => setNewNotification({ ...newNotification, title: e.target.value })}
+              autoFocus
+            />
+            <TextField
+              label="Mensaje"
+              fullWidth
+              multiline
+              rows={3}
+              value={newNotification.body}
+              onChange={(e) => setNewNotification({ ...newNotification, body: e.target.value })}
+            />
+            <FormControl fullWidth>
+              <InputLabel>Tipo</InputLabel>
+              <Select
+                value={newNotification.type}
+                label="Tipo"
+                onChange={(e) => setNewNotification({ ...newNotification, type: e.target.value as Notification["type"] })}
+              >
+                <MenuItem value="info">Información</MenuItem>
+                <MenuItem value="success">Éxito</MenuItem>
+                <MenuItem value="warning">Advertencia</MenuItem>
+                <MenuItem value="error">Error</MenuItem>
+              </Select>
+            </FormControl>
+            <TextField
+              label="Enlace (opcional)"
+              fullWidth
+              placeholder="/lists, /calendar, etc."
+              value={newNotification.link}
+              onChange={(e) => setNewNotification({ ...newNotification, link: e.target.value })}
+            />
+          </Stack>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setDialogOpen(false)}>Cancelar</Button>
+          <Button 
+            variant="contained" 
+            onClick={handleCreateNotification}
+            disabled={!newNotification.title || !newNotification.body}
+          >
+            Crear
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   );
 }
