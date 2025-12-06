@@ -15,7 +15,7 @@ import ContactsRoundedIcon from "@mui/icons-material/ContactsRounded";
 import AssignmentRoundedIcon from "@mui/icons-material/AssignmentRounded";
 import AssessmentRoundedIcon from "@mui/icons-material/AssessmentRounded";
 import TimelineRoundedIcon from "@mui/icons-material/TimelineRounded";
-import SettingsRoundedIcon from "@mui/icons-material/SettingsRounded";
+import NotificationsRoundedIcon from "@mui/icons-material/NotificationsRounded";
 import HelpOutlineRoundedIcon from "@mui/icons-material/HelpOutlineRounded";
 
 const mainListItems = [
@@ -29,7 +29,7 @@ const mainListItems = [
 ];
 
 const secondaryListItems = [
-  { text: "Configuración", icon: <SettingsRoundedIcon />, path: "/settings" },
+  { text: "Notificaciones", icon: <NotificationsRoundedIcon />, path: "/notifications" },
   { text: "Ayuda y Soporte", icon: <HelpOutlineRoundedIcon />, path: "/help" },
 ];
 

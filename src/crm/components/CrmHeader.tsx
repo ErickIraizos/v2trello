@@ -1,11 +1,10 @@
 import Stack from "@mui/material/Stack";
 import Typography from "@mui/material/Typography";
-import NotificationsRoundedIcon from "@mui/icons-material/NotificationsRounded";
-import MenuButton from "../../dashboard/components/MenuButton";
 import ColorModeIconDropdown from "../../shared-theme/ColorModeIconDropdown";
 import CrmSearch from "./CrmSearch";
 import CrmNavbarBreadcrumbs from "./CrmNavbarBreadcrumbs";
 import CrmDateRangePicker from "./CrmDateRangePicker";
+import NotificationBell from "./NotificationBell";
 
 export default function CrmHeader() {
   return (
@@ -30,9 +29,7 @@ export default function CrmHeader() {
       <Stack direction="row" sx={{ gap: 1 }}>
         <CrmSearch />
         <CrmDateRangePicker />
-        <MenuButton showBadge aria-label="Open notifications">
-          <NotificationsRoundedIcon />
-        </MenuButton>
+        <NotificationBell />
         <ColorModeIconDropdown />
       </Stack>
     </Stack>

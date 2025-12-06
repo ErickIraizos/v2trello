@@ -18,8 +18,9 @@ import Schedule from "./pages/Schedule";
 import History from "./pages/History";
 import Lists from "./pages/Lists";
 import Calendar from "./pages/Calendar";
-import Settings from "./pages/Settings";
 import Help from "./pages/Help";
+import Notifications from "./pages/Notifications";
+import { NotificationProvider } from "./context/NotificationContext";
 import AppTheme from "../shared-theme/AppTheme";
 import {
   chartsCustomizations,
@@ -37,9 +38,10 @@ const xThemeComponents = {
 
 export default function CrmDashboard() {
   return (
-    <AppTheme themeComponents={xThemeComponents}>
-      <CssBaseline enableColorScheme />
-      <Box sx={{ display: "flex", height: "100vh" }}>
+    <NotificationProvider>
+      <AppTheme themeComponents={xThemeComponents}>
+        <CssBaseline enableColorScheme />
+        <Box sx={{ display: "flex", height: "100vh" }}>
         <CrmSideMenu />
         <CrmAppNavbar />
         {/* Main content */}
@@ -71,13 +73,14 @@ export default function CrmDashboard() {
               <Route path="history" element={<History />} />
               <Route path="lists" element={<Lists />} />
               <Route path="calendar" element={<Calendar />} />
-              <Route path="settings" element={<Settings />} />
+              <Route path="notifications" element={<Notifications />} />
               <Route path="help" element={<Help />} />
             </Routes>
             <Outlet />
           </Stack>
         </Box>
-      </Box>
-    </AppTheme>
+        </Box>
+      </AppTheme>
+    </NotificationProvider>
   );
 }
