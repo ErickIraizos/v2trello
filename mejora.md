@@ -1,4 +1,4 @@
-# Actividad 4: Mejora Funcional - Sistema de Tareas (To-Do List)
+# Actividad 4: Mejora Funcional - Sistema de Tareas (To-Do List) 📋
 
 ## Resumen
 

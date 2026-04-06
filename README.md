@@ -1,12 +1,13 @@
 # V2Trello - Sistema CRM
 
+> Sistema de gestión de relaciones con clientes (CRM) basado en tableros Kanban
+
 ## Instalación
 
 ```bash
 npm install
 npm run dev
 ```
-
 
 ## 1. Tipo de Arquitectura
 
@@ -73,7 +74,6 @@ src/crm/
 | `useLocalStorage` | Persistencia y sincronización de estado con localStorage |
 | `useActivityLog`  | Registro de actividades del sistema                      |
 
-
 ---
 
 ## 3. Mejoras Arquitectónicas Propuestas
@@ -134,6 +134,3 @@ components/
 │   ├── KanbanBoardHeader.tsx # Encabezado con acciones
 │   └── index.ts
 ```
-
-
-
