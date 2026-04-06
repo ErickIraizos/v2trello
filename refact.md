@@ -1,4 +1,4 @@
-# Refactorizaciones Realizadas - V2Trello
+# Refactorizaciones Realizadas - V2Trello 🔄
 
 Este documento detalla las mejoras de refactorización aplicadas al proyecto.
 
